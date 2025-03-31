@@ -107,7 +107,7 @@ const SeedPage = () => {
                 setNewItem(prev => ({ ...prev, category_id: filtered[0].id }));
             }
         }
-    }, [selectedGroupId, categories]);
+    }, [selectedGroupId, categories, newItem.category_id]);
     
     // 새 항목 추가 함수
     const addNewItem = async () => {

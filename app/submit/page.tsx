@@ -4,15 +4,16 @@ import { useSession } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { USER_TIERS } from '@/lib/constants';
 
 type Category = {
-    id: number;
+    id: string;
     name: string;
-    group_id: number;
+    group_id: string;
 };
 
 type Group = {
-    id: number;
+    id: string;
     name: string;
 };
 
@@ -22,15 +23,17 @@ export default function SubmitPage() {
     
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [groups, setGroups] = useState<Group[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
-    const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [message, setMessage] = useState({ text: '', type: '' });
     const [remainingSubmissions, setRemainingSubmissions] = useState<number | null>(null);
+    const [userTier, setUserTier] = useState<string>(USER_TIERS.FREE);
+    const [maxSubmissions, setMaxSubmissions] = useState<number | null>(null);
     
     // 카테고리 데이터 로드
     useEffect(() => {
@@ -57,15 +60,22 @@ export default function SubmitPage() {
     
     // 그룹 선택 시 카테고리 필터링
     useEffect(() => {
+        console.log('selectedGroupId:', selectedGroupId, 'type:', typeof selectedGroupId);
+        console.log('groups:', groups);
+        
         if (selectedGroupId) {
-            const filtered = categories.filter(category => category.group_id === selectedGroupId);
+            const filtered = categories.filter(category => {
+                console.log('category.group_id:', category.group_id, 'type:', typeof category.group_id);
+                return category.group_id === selectedGroupId;
+            });
+            console.log('filtered categories:', filtered);
             setFilteredCategories(filtered);
             // 그룹이 변경되면 선택된 카테고리 초기화
             setSelectedCategoryId(null);
         } else {
             setFilteredCategories([]);
         }
-    }, [selectedGroupId, categories]);
+    }, [selectedGroupId, categories, groups]);
     
     // 남은 제안 횟수 조회
     useEffect(() => {
@@ -77,6 +87,8 @@ export default function SubmitPage() {
                     
                     if (data.success) {
                         setRemainingSubmissions(data.remaining);
+                        setUserTier(data.tier || USER_TIERS.FREE);
+                        setMaxSubmissions(data.maxSubmissions);
                     }
                 } catch (error) {
                     console.error('남은 제안 횟수 조회 실패:', error);
@@ -165,11 +177,29 @@ export default function SubmitPage() {
         <div className="max-w-md mx-auto p-6 bg-gray-50 dark:bg-gray-800 rounded-lg shadow-sm">
             <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">➕ 항목 제안</h1>
             
-            {remainingSubmissions !== null && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <p className="text-sm text-blue-800">
-                        이번 달 남은 제안 가능 횟수: <strong>{remainingSubmissions}회</strong>
-                    </p>
+            {/* 사용자 등급 및 남은 제안 횟수 표시 */}
+            {session && session.user && (
+                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                    <div className="flex flex-col space-y-2">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                현재 등급: <span className={`${userTier === USER_TIERS.PREMIUM ? 'text-blue-600 dark:text-blue-400' : userTier === USER_TIERS.PRO ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    {userTier === USER_TIERS.FREE ? '무료 회원' : 
+                                     userTier === USER_TIERS.PREMIUM ? '프리미엄 회원' : 
+                                     userTier === USER_TIERS.PRO ? 'Pro 회원' : 
+                                     userTier === USER_TIERS.ADMIN ? '관리자' : '무료 회원'}
+                                </span>
+                            </h2>
+                            {userTier === USER_TIERS.FREE && (
+                                <Link href="/upgrade" className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                                    업그레이드
+                                </Link>
+                            )}
+                        </div>
+                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                            이번 달 남은 제안 횟수: <strong>{remainingSubmissions !== null ? `${remainingSubmissions}/${maxSubmissions}` : '로딩 중...'}</strong>
+                        </p>
+                    </div>
                 </div>
             )}
             
@@ -192,7 +222,11 @@ export default function SubmitPage() {
                     <select
                         className="w-full border border-gray-300 px-3 py-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         value={selectedGroupId !== null ? String(selectedGroupId) : ''}
-                        onChange={(e) => setSelectedGroupId(e.target.value ? Number(e.target.value) : null)}
+                        onChange={(e) => {
+                            const newValue = e.target.value || null;
+                            console.log('onChange - new selectedGroupId:', newValue, 'type:', typeof newValue);
+                            setSelectedGroupId(newValue);
+                        }}
                         required
                     >
                         <option value="">그룹을 선택해 주세요</option>
@@ -212,7 +246,7 @@ export default function SubmitPage() {
                     <select
                         className="w-full border border-gray-300 px-3 py-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         value={selectedCategoryId !== null ? String(selectedCategoryId) : ''}
-                        onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
+                        onChange={(e) => setSelectedCategoryId(e.target.value || null)}
                         disabled={!selectedGroupId}
                         required
                     >

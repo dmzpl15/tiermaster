@@ -23,15 +23,6 @@ interface Item {
     votes: number;
 }
 
-interface Vote {
-    id?: string;
-    user_id: string;
-    item_id: string;
-    category_id: string; // ✅ 추가
-    created_at?: string;
-}
-
-
 
 /*
 ✅ 1. 페이지 로딩 시 필요한 데이터 불러오기
@@ -126,7 +117,7 @@ export default function VotePage() {
         if (session) {
             loadVoteData();
         }
-    }, [session]); // 세션이 변경될 때마다 실행
+    }, [session, supabase]); // 세션이 변경될 때마다 실행
 
     const filteredCategories = categories.filter((c) => c.group_id === selectedGroupId);
     const selectedCategory = selectedCategoryId ? categories.find(c => c.id === selectedCategoryId) : null;

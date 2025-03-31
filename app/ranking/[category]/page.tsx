@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { use } from 'react';
 import Link from 'next/link';
-import { useTheme } from 'next-themes';
+import AdBanner from '@/components/AdBanner';
 
 // 티어 색상 정의
 const tierColors = {
@@ -15,16 +15,16 @@ const tierColors = {
 };
 
 type Item = {
-  id: number;
+  id: string;
   name: string;
   votes: number;
-  category_id: number;
+  category_id: string;
 };
 
 type Category = {
-  id: number;
+  id: string;
   name: string;
-  group_id: number;
+  group_id: string;
 };
 
 type TieredItems = {
@@ -40,7 +40,6 @@ export default function CategoryRankingPage({ params }: { params: Promise<{ cate
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<Category | null>(null);
   const [tieredItems, setTieredItems] = useState<TieredItems>({ S: [], A: [], B: [], C: [], D: [] });
-  const { theme } = useTheme();
   
   const resolvedParams = use(params);
   const categoryId = resolvedParams.category;
@@ -60,9 +59,9 @@ export default function CategoryRankingPage({ params }: { params: Promise<{ cate
         setCategory(data.category);
         setTieredItems(data.tieredItems);
         setError(null);
-      } catch (err: any) {
+      } catch (err: Error | unknown) {
         console.error('데이터 로딩 오류:', err);
-        setError(err.message || '데이터를 가져오는 중 오류가 발생했습니다.');
+        setError(err instanceof Error ? err.message : '데이터를 가져오는 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
       }
@@ -147,9 +146,18 @@ export default function CategoryRankingPage({ params }: { params: Promise<{ cate
       {/* 티어 섹션 */}
       {renderTier('S', tieredItems.S)}
       {renderTier('A', tieredItems.A)}
+      
+      {/* A티어와 B티어 사이에 광고 배너 */}
+      <AdBanner type="horizontal" className="my-6" />
+      
       {renderTier('B', tieredItems.B)}
       {renderTier('C', tieredItems.C)}
       {renderTier('D', tieredItems.D)}
+      
+      {/* 하단에 광고 배너 */}
+      <div className="mt-8">
+        <AdBanner type="square" className="mx-auto" />
+      </div>
 
       {/* 항목이 없는 경우 */}
       {Object.values(tieredItems).every(items => items.length === 0) && (

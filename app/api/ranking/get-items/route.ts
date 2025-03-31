@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// 타입 정의
+type Item = {
+  id: string;
+  name: string;
+  votes: number;
+  category_id: string;
+};
+
 // Supabase 클라이언트 생성
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -41,12 +49,12 @@ export async function GET(req: Request) {
     }
 
     // 티어 계산 로직
-    let tieredItems = {
-      S: [] as any[],
-      A: [] as any[],
-      B: [] as any[],
-      C: [] as any[],
-      D: [] as any[]
+    const tieredItems = {
+      S: [] as Item[],
+      A: [] as Item[],
+      B: [] as Item[],
+      C: [] as Item[],
+      D: [] as Item[]
     };
 
     // 항목이 있는 경우에만 티어 계산

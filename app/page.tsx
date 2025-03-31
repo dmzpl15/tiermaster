@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import AdBanner from '@/components/AdBanner';
 
 // 티어 색상 정의
 const tierColors = {
@@ -36,12 +37,20 @@ const features = [
   }
 ];
 
+// 항목 타입 정의
+type Item = {
+  id: string;
+  name: string;
+  votes: number;
+  category_id: string;
+};
+
 type TieredItems = {
-  S: any[];
-  A: any[];
-  B: any[];
-  C: any[];
-  D: any[];
+  S: Item[];
+  A: Item[];
+  B: Item[];
+  C: Item[];
+  D: Item[];
 };
 
 type CategoryData = {
@@ -55,7 +64,7 @@ type CategoryData = {
 
 type PopularTier = {
   category: CategoryData;
-  items: any[];
+  items: Item[];
   tieredItems: TieredItems;
 };
 
@@ -77,9 +86,9 @@ export default function HomePage() {
         const data = await response.json();
         setPopularTiers(data.popularTiers || []);
         setError(null);
-      } catch (err: any) {
+      } catch (err: Error | unknown) {
         console.error('데이터 로딩 오류:', err);
-        setError(err.message);
+        setError(err instanceof Error ? err.message : '데이터를 가져오는 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
       }
@@ -205,6 +214,9 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
+      
+      {/* 광고 배너 */}
+      <AdBanner type="horizontal" className="my-10" />
       
       {/* 참여 유도 섹션 */}
       <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">

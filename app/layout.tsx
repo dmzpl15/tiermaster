@@ -1,6 +1,7 @@
 import './globals.css';
 import { Providers } from './providers';
 import Header from './components/Header';
+import SideAdBanner from '@/components/SideAdBanner';
 
 export const metadata = {
   title: 'Tier Master',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers> {/* ✅ 이제 여기서만 ThemeProvider, SessionProvider 적용 */}
           <Header />
           <main>{children}</main>
+          <SideAdBanner />
         </Providers>
       </body>
     </html>

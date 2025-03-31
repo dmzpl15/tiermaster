@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getServerSession } from 'next-auth';
 import { authConfig } from '@/lib/auth-config';
+import { MONTHLY_SUBMISSION_LIMITS, USER_TIERS } from '@/lib/constants';
 
 export async function GET() {
   try {
@@ -21,6 +22,24 @@ export async function GET() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
+    
+    // 사용자 정보 조회 (등급 확인)
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('tier')
+      .eq('email', session.user.email)
+      .single();
+    
+    if (userError) {
+      console.error('사용자 정보 조회 실패:', userError);
+      return NextResponse.json({ 
+        success: false, 
+        message: '사용자 정보 확인 중 오류가 발생했습니다.' 
+      }, { status: 500 });
+    }
+    
+    // 사용자 등급 확인 (기본값은 free)
+    const userTier = userData?.tier || USER_TIERS.FREE;
     
     // 사용자 제안 횟수 확인 (월별)
     const currentDate = new Date();
@@ -42,13 +61,15 @@ export async function GET() {
       }, { status: 500 });
     }
     
-    // 기본 사용자는 월 2회까지 제안 가능 (추후 등급별로 차등 적용 예정)
-    const maxSubmissions = 2;
+    // 등급별 제안 가능 횟수 적용
+    const maxSubmissions = MONTHLY_SUBMISSION_LIMITS[userTier] || MONTHLY_SUBMISSION_LIMITS[USER_TIERS.FREE];
     const remaining = Math.max(0, maxSubmissions - (count || 0));
     
     return NextResponse.json({ 
       success: true, 
       remaining,
+      tier: userTier,
+      maxSubmissions,
       max: maxSubmissions
     });
   } catch (e) {
