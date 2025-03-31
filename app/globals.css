@@ -1,9 +1,24 @@
 @import "tailwindcss";
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
+
+/* app/globals.css */
+html {
+  @apply bg-white text-black;
+}
+
+html.dark {
+  @apply bg-gray-900 text-white;
+}
+
 
 @theme inline {
   --color-background: var(--background);
