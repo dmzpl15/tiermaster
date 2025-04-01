@@ -1,0 +1,53 @@
+// // app/sitemap.ts
+// import { MetadataRoute } from 'next'
+
+// /*
+// App Router를 사용 중이라면 내장 사이트맵 API(app/sitemap.ts)를 사용하는 것이 가장 간단합니다.
+// 동적 페이지(카테고리, 아이템 등)는 데이터베이스에서 가져와 URL을 생성하세요.
+// 사이트맵이 생성되면 Google Search Console에 제출하여 색인 생성을 촉진하세요.
+// */
+// //이 파일을 만들면 Next.js가 자동으로 /sitemap.xml 경로에 사이트맵을 생성합니다.
+// export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+//   // 기본 URL들
+//   const baseUrls = [
+//     {
+//       url: 'https://tiermaster.co.kr',
+//       lastModified: new Date(),
+//       changeFrequency: 'daily',
+//       priority: 1,
+//     },
+//     {
+//       url: 'https://tiermaster.co.kr/vote',
+//       lastModified: new Date(),
+//       changeFrequency: 'daily',
+//       priority: 0.8,
+//     },
+//     // 다른 정적 페이지들 추가
+//   ]
+
+//   // 동적 페이지 URL 가져오기 (예: 카테고리 페이지)
+//   const categories = await fetch('https://tiermaster.co.kr/api/categories').then(
+//     (res) => res.json()
+//   )
+
+// //   const categoryUrls = categories.map((category: { id: string }) => ({
+// //     url: `https://tiermaster.co.kr/ranking/${category.id}`,
+// //     lastModified: new Date(),
+// //     changeFrequency: 'weekly',
+// //     priority: 0.7,
+// //   }))
+
+//   // 아이템 페이지 URL 가져오기
+//   const items = await fetch('https://tiermaster.co.kr/api/items').then(
+//     (res) => res.json()
+//   )
+
+//   const itemUrls = items.map((item: { id: string }) => ({
+//     url: `https://tiermaster.co.kr/item/${item.id}`,
+//     lastModified: new Date(),
+//     changeFrequency: 'weekly',
+//     priority: 0.6,
+//   }))
+
+//   return [...baseUrls, ...categoryUrls, ...itemUrls]
+// }
