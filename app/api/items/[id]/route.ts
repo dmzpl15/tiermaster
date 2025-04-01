@@ -3,15 +3,19 @@ import { supabase } from '@/lib/supabase';
 import { getServerSession } from 'next-auth';
 import { authConfig } from '@/lib/auth-config';
 
+type Params = {
+  params: {
+    id: string;
+  };
+};
+
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  { params }: Params
 ) {
   try {
-    // params를 await해야 함
-    const resolvedParams = await Promise.resolve(params);
-    console.log('항목 상세 API 호출:', resolvedParams);
-    const itemId = resolvedParams.id;
+    console.log('항목 상세 API 호출:', params);
+    const itemId = params.id;
     if (!itemId) {
       return NextResponse.json(
         { error: '항목 ID가 필요합니다.' },

@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import Head from 'next/head';
 import AdBanner from '@/components/AdBanner';
 import { useSession } from 'next-auth/react';
 
@@ -58,11 +56,18 @@ export default function ItemDetailPage() {
 
     script.onload = () => {
       // Kakao SDK 초기화
-      window.Kakao.init(process.env.NEXT_PUBLIC_KAKAO_API_KEY);
+      const apiKey = process.env.NEXT_PUBLIC_KAKAO_API_KEY || '';
+      if (apiKey) {
+        window.Kakao.init(apiKey);
+      } else {
+        console.error('Kakao API 키가 설정되지 않았습니다.');
+      }
     };
 
     return () => {
-      document.body.removeChild(script);
+      if (script.parentNode) {
+        document.body.removeChild(script);
+      }
     };
   }, []);
 
@@ -84,9 +89,9 @@ export default function ItemDetailPage() {
         setRelatedItems(data.relatedItems || []);
         setHasVoted(data.hasVoted || false);
         setError(null);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('데이터 로딩 오류:', err);
-        setError(err.message);
+        setError(err instanceof Error ? err.message : '데이터를 가져오는데 실패했습니다.');
       } finally {
         setLoading(false);
       }
@@ -127,9 +132,9 @@ export default function ItemDetailPage() {
       const updatedData = await updatedItemResponse.json();
       setItem(updatedData.item);
       setHasVoted(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('투표 오류:', err);
-      alert(err.message);
+      alert(err instanceof Error ? err.message : '투표 중 오류가 발생했습니다.');
     }
   };
 
@@ -309,6 +314,30 @@ export default function ItemDetailPage() {
 // 타입 정의
 declare global {
   interface Window {
-    Kakao: any;
+    Kakao: {
+      init: (apiKey: string) => void;
+      isInitialized: () => boolean;
+      Link: {
+        sendDefault: (settings: {
+          objectType: string;
+          content: {
+            title: string;
+            description: string;
+            imageUrl: string;
+            link: {
+              mobileWebUrl: string;
+              webUrl: string;
+            };
+          };
+          buttons: Array<{
+            title: string;
+            link: {
+              mobileWebUrl: string;
+              webUrl: string;
+            };
+          }>;
+        }) => void;
+      };
+    };
   }
 }

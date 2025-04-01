@@ -70,7 +70,7 @@ export default function VotePage() {
             if (groupData?.length) setSelectedGroupId(groupData[0].id);
         };
         loadData();
-    }, []);
+    }, [supabase]);
 
     // 세션이 변경될 때마다 투표 데이터 가져오기
     useEffect(() => {

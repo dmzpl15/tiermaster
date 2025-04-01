@@ -54,7 +54,12 @@ export default function CategoryRankingPage({ params }: { params: Promise<{ cate
     script.onload = () => {
       // Kakao SDK 초기화
       if (window.Kakao && !window.Kakao.isInitialized()) {
-        window.Kakao.init(process.env.NEXT_PUBLIC_KAKAO_API_KEY);
+        const apiKey = process.env.NEXT_PUBLIC_KAKAO_API_KEY || '';
+        if (apiKey) {
+          window.Kakao.init(apiKey);
+        } else {
+          console.error('Kakao API 키가 설정되지 않았습니다.');
+        }
       }
     };
 
