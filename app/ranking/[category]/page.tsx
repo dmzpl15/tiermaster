@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { use } from 'react';
 import Link from 'next/link';
 import AdBanner from '@/components/AdBanner';
+import { useRouter } from 'next/navigation';
 
 // 티어 색상 정의
 const tierColors = {
@@ -36,10 +37,33 @@ type TieredItems = {
 };
 
 export default function CategoryRankingPage({ params }: { params: Promise<{ category: string }> }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<Category | null>(null);
   const [tieredItems, setTieredItems] = useState<TieredItems>({ S: [], A: [], B: [], C: [], D: [] });
+  
+  // Kakao SDK 초기화
+  useEffect(() => {
+    // Kakao SDK 스크립트 로드
+    const script = document.createElement('script');
+    script.src = 'https://developers.kakao.com/sdk/js/kakao.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    script.onload = () => {
+      // Kakao SDK 초기화
+      if (window.Kakao && !window.Kakao.isInitialized()) {
+        window.Kakao.init(process.env.NEXT_PUBLIC_KAKAO_API_KEY);
+      }
+    };
+
+    return () => {
+      if (script.parentNode) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
   
   const resolvedParams = use(params);
   const categoryId = resolvedParams.category;
@@ -72,6 +96,55 @@ export default function CategoryRankingPage({ params }: { params: Promise<{ cate
     }
   }, [categoryId]);
 
+  // 카카오톡 공유하기 함수
+  const shareToKakao = (item: Item) => {
+    if (!window.Kakao) {
+      alert('카카오톡 SDK를 불러오는데 실패했습니다.');
+      return;
+    }
+    
+    if (!window.Kakao.isInitialized()) {
+      alert('카카오톡 SDK가 초기화되지 않았습니다.');
+      return;
+    }
+    
+    const shareUrl = `${window.location.origin}/item/${item.id}`;
+    
+    window.Kakao.Link.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: `${item.name} - Tier Master`,
+        description: `${item.name}은(는) 현재 ${category?.name || ''} 카테고리에서 ${item.votes}개의 추천을 받았습니다.`,
+        imageUrl: `${window.location.origin}/images/logo.png`,
+        link: {
+          mobileWebUrl: shareUrl,
+          webUrl: shareUrl
+        }
+      },
+      buttons: [
+        {
+          title: '자세히 보기',
+          link: {
+            mobileWebUrl: shareUrl,
+            webUrl: shareUrl
+          }
+        },
+        {
+          title: '추천하기',
+          link: {
+            mobileWebUrl: `${window.location.origin}/vote`,
+            webUrl: `${window.location.origin}/vote`
+          }
+        }
+      ]
+    });
+  };
+  
+  // 항목 상세 페이지로 이동
+  const goToItemDetail = (itemId: string) => {
+    router.push(`/item/${itemId}`);
+  };
+
   // 티어 렌더링 함수
   const renderTier = (tier: 'S' | 'A' | 'B' | 'C' | 'D', items: Item[]) => {
     if (items.length === 0) return null;
@@ -88,11 +161,29 @@ export default function CategoryRankingPage({ params }: { params: Promise<{ cate
         <div className={`p-4 rounded-lg border-2 ${tierColors[tier].light} ${tierColors[tier].dark}`}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {items.map((item) => (
-              <div key={item.id} className="bg-white dark:bg-gray-700 p-3 rounded-md shadow-sm flex justify-between items-center">
-                <span className="font-medium text-gray-800 dark:text-gray-200">{item.name}</span>
-                <span className="text-sm bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-gray-700 dark:text-gray-300">
-                  {item.votes} 추천
-                </span>
+              <div key={item.id} className="bg-white dark:bg-gray-700 p-3 rounded-md shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span 
+                    className="font-medium text-gray-800 dark:text-gray-200 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => goToItemDetail(item.id)}
+                  >
+                    {item.name}
+                  </span>
+                  <span className="text-sm bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-gray-700 dark:text-gray-300">
+                    {item.votes} 추천
+                  </span>
+                </div>
+                <div className="flex justify-end">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      shareToKakao(item);
+                    }}
+                    className="text-xs px-2 py-1 bg-yellow-400 hover:bg-yellow-500 text-black rounded flex items-center"
+                  >
+                    <span className="mr-1">🗨️</span> 공유
+                  </button>
+                </div>
               </div>
             ))}
           </div>

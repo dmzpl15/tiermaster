@@ -34,20 +34,25 @@ export default function GoogleAdSense({ type, className = '' }: GoogleAdSensePro
   const slotId = getSlotId(type);
 
   useEffect(() => {
-    try {
-      if (clientId && slotId) {
-        // 애드센스 광고 로딩
-        if (typeof window !== 'undefined') {
-          // 안전한 방식으로 애드센스 스크립트 추가
-          if (!window.adsbygoogle) {
-            window.adsbygoogle = [];
+    // 애드센스 광고 로딩 지연
+    const timer = setTimeout(() => {
+      try {
+        if (clientId && slotId && typeof window !== 'undefined') {
+          // 광고 초기화 시도
+          if (window.adsbygoogle && Array.isArray(window.adsbygoogle)) {
+            window.adsbygoogle.push({});
+          } else {
+            // adsbygoogle 객체가 없는 경우 초기화
+            window.adsbygoogle = window.adsbygoogle || [];
+            window.adsbygoogle.push({});
           }
-          window.adsbygoogle.push({});
         }
+      } catch (err) {
+        console.error('AdSense 오류:', err);
       }
-    } catch (err) {
-      console.error('AdSense 오류:', err);
-    }
+    }, 100); // 지연을 통해 스크립트가 먼저 로드되도록 함
+    
+    return () => clearTimeout(timer);
   }, [clientId, slotId]);
 
   if (!clientId || !slotId) return null;
@@ -56,7 +61,7 @@ export default function GoogleAdSense({ type, className = '' }: GoogleAdSensePro
     <div className={className}>
       <ins
         className="adsbygoogle"
-        style={{ display: 'block' }}
+        style={{ display: 'block', width: '100%', height: '100%', minHeight: '100px' }}
         data-ad-client={clientId}
         data-ad-slot={slotId}
         data-ad-format="auto"
