@@ -145,6 +145,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
 
+  /**** 
   // ✅ 사용자 ID 조회 (이메일로 UUID 가져오기)
   const { data: userData, error: userError } = await supabase
     .from('users')
@@ -170,13 +171,40 @@ export async function DELETE(req: Request) {
   
     if (!existing) {
       return NextResponse.json({ error: '추천 기록이 없습니다.' }, { status: 404 });
-    }
+    } ***/
 
+      // 사용자 ID 조회와 추천 기록 확인을 병렬로 수행
+  const [userResponse, voteResponse] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id')
+      .eq('email', user.email)
+      .maybeSingle(),
+    
+    supabase
+      .from('votes')
+      .select('id') // 전체 데이터가 아닌 id만 필요
+      .eq('user_id', (await supabase.from('users').select('id').eq('email', user.email).maybeSingle()).data?.id)
+      .eq('item_id', Number(itemId))
+      .maybeSingle()
+  ]);
+
+  if (userResponse.error || !userResponse.data) {
+    return NextResponse.json({ error: '사용자 정보 없음' }, { status: 400 });
+  }
+
+  if (voteResponse.error) {
+    return NextResponse.json({ error: '추천 기록 조회 실패' }, { status: 500 });
+  }
+
+  if (!voteResponse.data) {
+    return NextResponse.json({ error: '추천 기록이 없습니다.' }, { status: 404 });
+  }
     // ✅ 2. 추천 삭제
   const { error: deleteError } = await supabase
     .from('votes')
     .delete()
-    .eq('user_id', userData.id) // 이메일 대신 UUID 사용
+    .eq('user_id', userResponse.data.id) // 이메일 대신 UUID 사용
     .eq('item_id', Number(itemId)); // 숫자로 변환
 
   if (deleteError) {
