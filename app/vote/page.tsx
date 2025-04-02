@@ -107,8 +107,12 @@ export default function VotePage() {
         : [];
 
     /**
-     * 투표 처리 중 연속 클릭 방지를 위한 디바운싱 상태
-     * true일 때는 클릭을 무시하여 중복 요청 방지
+     * 마지막 투표 시간을 기록하여 연속 클릭 방지
+     */
+    const [lastVoteTime, setLastVoteTime] = useState<number>(0);
+    
+    /**
+     * 투표 처리 중 상태 (시각적 피드백용)
      */
     const [isVoting, setIsVoting] = useState(false);
     
@@ -141,8 +145,20 @@ export default function VotePage() {
      * @param item - 투표할 항목 객체
      */
     const handleVote = async (item: Item) => {
-        // IMPORTANT: 이미 요청 처리 중이면 추가 클릭 무시 (디바운싱)
+        const now = Date.now();
+        const timeSinceLastVote = now - lastVoteTime;
+        
+        // 0.5초(500ms) 이내의 연속 클릭은 무시
+        if (timeSinceLastVote < 500) {
+            console.log('연속 클릭 감지, 무시됨:', timeSinceLastVote + 'ms');
+            return;
+        }
+        
+        // 이미 요청 처리 중이면 추가 클릭 무시
         if (isVoting) return;
+        
+        // 현재 시간을 마지막 투표 시간으로 기록
+        setLastVoteTime(now);
         
         // 투표 처리 중 상태로 설정
         setIsVoting(true);
@@ -255,12 +271,9 @@ export default function VotePage() {
             console.error('투표 처리 오류:', error);
             showToast('네트워크 오류: 인터넷 연결을 확인해주세요.', 'error');
         } finally {
-            // IMPORTANT: 디바운싱 해제를 위한 타이머
-            // 약간의 지연을 주어 연속 클릭 방지 (300ms 쿨다운)
-            setTimeout(() => {
-                setIsVoting(false);
-                setLoadingItemId(null); // 로딩 상태 해제
-            }, 300);
+            // 처리 완료 후 즉시 상태 해제
+            setIsVoting(false);
+            setLoadingItemId(null); // 로딩 상태 해제
         }
     };
     
