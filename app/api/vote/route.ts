@@ -145,8 +145,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
 
-  /**** 
-  // ✅ 사용자 ID 조회 (이메일로 UUID 가져오기)
+  // ✅ 1. 사용자 ID 조회 (이메일로 UUID 가져오기)
   const { data: userData, error: userError } = await supabase
     .from('users')
     .select('id')
@@ -157,69 +156,42 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: '사용자 정보 없음' }, { status: 400 });
   }
 
-    // ✅ 1. 추천 기록 존재 확인
-  const { data: existing, error: checkError } = await supabase
-    .from('votes')
-    .select('*')
-    .eq('user_id', userData.id) // 이메일 대신 UUID 사용
-    .eq('item_id', Number(itemId)) // 숫자로 변환
-    .maybeSingle();
-
-    if (checkError) {
+      // 2. 사용자 ID를 알았으니 투표 기록 확인
+      const { data: voteData, error: voteError } = await supabase
+      .from('votes')
+      .select('id')
+      .eq('user_id', userData.id)
+      .eq('item_id', Number(itemId))
+      .maybeSingle();
+  
+    if (voteError) {
       return NextResponse.json({ error: '추천 기록 조회 실패' }, { status: 500 });
     }
   
-    if (!existing) {
+    if (!voteData) {
       return NextResponse.json({ error: '추천 기록이 없습니다.' }, { status: 404 });
-    } ***/
-
-      // 사용자 ID 조회와 추천 기록 확인을 병렬로 수행
-  const [userResponse, voteResponse] = await Promise.all([
-    supabase
-      .from('users')
-      .select('id')
-      .eq('email', user.email)
-      .maybeSingle(),
-    
-    supabase
-      .from('votes')
-      .select('id') // 전체 데이터가 아닌 id만 필요
-      .eq('user_id', (await supabase.from('users').select('id').eq('email', user.email).maybeSingle()).data?.id)
-      .eq('item_id', Number(itemId))
-      .maybeSingle()
-  ]);
-
-  if (userResponse.error || !userResponse.data) {
-    return NextResponse.json({ error: '사용자 정보 없음' }, { status: 400 });
-  }
-
-  if (voteResponse.error) {
-    return NextResponse.json({ error: '추천 기록 조회 실패' }, { status: 500 });
-  }
-
-  if (!voteResponse.data) {
-    return NextResponse.json({ error: '추천 기록이 없습니다.' }, { status: 404 });
-  }
-    // ✅ 2. 추천 삭제
-  const { error: deleteError } = await supabase
+    }
+      
+ // 3. 삭제 및 카운트 감소는 병렬로 처리 가능
+ const [deleteResponse, decrementResponse] = await Promise.all([
+  supabase
     .from('votes')
     .delete()
-    .eq('user_id', userResponse.data.id) // 이메일 대신 UUID 사용
-    .eq('item_id', Number(itemId)); // 숫자로 변환
-
-  if (deleteError) {
-    return NextResponse.json({ error: '추천 취소 실패' }, { status: 500 });
-  }
-
-
-  // ✅ 3. 캐시 감소 RPC
-  const { error: rpcError } = await supabase.rpc('decrement_votes', {
+    .eq('user_id', userData.id)
+    .eq('item_id', Number(itemId)),
+  
+  supabase.rpc('decrement_votes', {
     item_id_input: Number(itemId),
-  });
+  })
+]);
 
-  if (rpcError) {
-    return NextResponse.json({ error: '추천 수 감소 실패' }, { status: 500 });
-  }
+if (deleteResponse.error) {
+  return NextResponse.json({ error: '추천 취소 실패' }, { status: 500 });
+}
+
+if (decrementResponse.error) {
+  return NextResponse.json({ error: '추천 수 감소 실패' }, { status: 500 });
+}
 
   return NextResponse.json({ success: true, itemId });
 }
