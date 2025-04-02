@@ -23,28 +23,6 @@ interface Item {
     votes: number;
 }
 
-
-/*
-✅ 1. 페이지 로딩 시 필요한 데이터 불러오기
-useEffect 안에서 groups, categories, items, votes를 함께 불러옴
-
-✅ 2. 추천 클릭 시
-동일 카테고리에서 기존에 추천한 항목이 있다면 먼저 추천 취소
-새로운 항목에 추천 insert 요청 (/api/vote)
-성공 시: items.votes 반영, votedItemIds에 추가
-
-
-✅ 3. 새로고침 시 동기화됨
-DB의 최신 상태를 다시 읽어옴
-
-
-✅ 추가 UX 기능
-버튼 상태: 이미 추천했다면 ✅ 추천 완료 + 회색
-중복 추천 시 자동 취소 후 추천
-추천 취소도 가능 (같은 항목 클릭 시 toggle 가능)
-아래에 내가 추천한 항목 목록 표시
-
-*/
 export default function VotePage() {
     const supabase = createClientComponentClient();
     const { data: session } = useSession();
@@ -55,6 +33,9 @@ export default function VotePage() {
     const [votedItemIds, setVotedItemIds] = useState<string[]>([]);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+    
+    // 모바일에서 사이드바 토글 상태 관리
+    const [showSidebar, setShowSidebar] = useState(true);
 
     useEffect(() => {
         const loadData = async () => {
@@ -185,7 +166,7 @@ export default function VotePage() {
                 // DELETE 요청을 보내 투표 취소
                 const res = await fetch('/api/vote', {
                     method: 'DELETE',
-                    body: JSON.stringify({ itemId: item.id }),
+                    body: JSON.stringify({ itemId: Number(item.id) }),
                 });
                 
                 if (res.ok) {
@@ -205,7 +186,10 @@ export default function VotePage() {
                     // 오류 발생 시 사용자에게 알림
                     showToast('투표 취소 중 오류가 발생했습니다.', 'error');
                 }
+                
                 // IMPORTANT: 투표 취소 후 함수 종료 - 추가 요청 없음
+                setIsVoting(false);
+                setLoadingItemId(null);
                 return;
             }
             
@@ -215,7 +199,7 @@ export default function VotePage() {
                 // 기존 투표 취소를 위한 DELETE 요청
                 const res = await fetch('/api/vote', {
                     method: 'DELETE',
-                    body: JSON.stringify({ itemId: otherVotedItem.id }),
+                    body: JSON.stringify({ itemId: Number(otherVotedItem.id) }),
                 });
                 
                 if (res.ok) {
@@ -234,6 +218,8 @@ export default function VotePage() {
                 } else {
                     // 오류 발생 시 사용자에게 알림
                     showToast('기존 투표 취소 중 오류가 발생했습니다.', 'error');
+                    setIsVoting(false);
+                    setLoadingItemId(null);
                     return; // 오류 발생 시 현재 항목 투표 시도 중단
                 }
             }
@@ -242,7 +228,7 @@ export default function VotePage() {
             // 새로운 투표를 위한 POST 요청
             const res = await fetch('/api/vote', {
                 method: 'POST',
-                body: JSON.stringify({ itemId: item.id }),
+                body: JSON.stringify({ itemId: Number(item.id) }),
             });
 
             const result = await res.json();
@@ -277,130 +263,213 @@ export default function VotePage() {
             }, 300);
         }
     };
-
+    
+    // 화면 크기 변경 감지 - 클라이언트 사이드에서만 실행
+    useEffect(() => {
+        // 서버 사이드 렌더링 중에는 window 객체가 없음
+        if (typeof window === 'undefined') return;
+        
+        const handleResize = () => {
+            // PC 화면에서는 항상 사이드바 표시
+            if (window.innerWidth >= 768) {
+                setShowSidebar(true);
+            } else {
+                // 모바일에서는 초기에 사이드바 숨김
+                setShowSidebar(false);
+            }
+        };
+        
+        // 초기 실행
+        handleResize();
+        
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+    
     // 토스트 메시지 컴포넌트
     const Toast = () => {
         if (!toast.show) return null;
         
         return (
-            <div className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg transition-opacity duration-300 ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+            <div className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg transition-opacity duration-300 ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white z-50`}>
                 {toast.message}
             </div>
         );
     };
     
     return (
-        <div className="flex min-h-screen bg-background text-foreground relative">
+        <div className="min-h-screen bg-background text-foreground flex flex-col">
             {/* 토스트 메시지 표시 */}
             <Toast />
             
-            <aside className="w-48 p-4 border-r bg-gray-50 dark:bg-gray-900">
-                <h2 className="font-bold mb-2">그룹</h2>
-                <ul className="space-y-1">
-                    {groups.map((group) => (
-                        <li key={group.id}>
-                            <button
-                                onClick={() => {
-                                    setSelectedGroupId(group.id);
-                                    setSelectedCategoryId(null);
-                                }}
-                                className={`w-full text-left ${selectedGroupId === group.id ? 'font-bold' : ''}`}
-                            >
-                                {group.name}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </aside>
-
-            <main className="flex-1 p-6">
-                <div className="flex flex-wrap gap-2 mb-4">
-                    {filteredCategories.map((cat) => (
-                        <button
-                            key={cat.id}
-                            onClick={() => setSelectedCategoryId(cat.id)}
-                            className={`px-3 py-1 border rounded ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white' : ''}`}
-                        >
-                            {cat.name}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">{selectedCategory?.name || '카테고리를 선택하세요'}</h2>
-                    {selectedCategoryId && (
-                        <Link 
-                            href={`/ranking/${selectedCategoryId}`}
-                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-md flex items-center"
-                        >
-                            <span>📊 티어 보기</span>
-                        </Link>
-                    )}
-                </div>
-
-
-                {/* max-w-md: 최대 너비 768px 정도 mx-auto: 수평 중앙 정렬 */}
-                <div className="w-full max-w-md ">
-                    {filteredItems.map((item) => (
-                        <div
-                            key={item.id}
-                            className="flex justify-between items-center border px-3 py-1 mb-1 rounded text-sm"
-                        >
-                            <span className="truncate">{item.name}</span>
-                            <div className="flex items-center gap-2">
-                                <span className="text-gray-500">{item.votes} 추천</span>
+            {/* 모바일에서 사이드바 뒤의 오버레이 */}
+            {showSidebar && (
+                <div 
+                    className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
+                    onClick={() => setShowSidebar(false)}
+                />
+            )}
+            
+            {/* 모바일 헤더 - 사이드바 토글 버튼 */}
+            <div className="md:hidden flex items-center justify-between p-4 border-b">
+                <h1 className="text-lg font-bold">티어마스터</h1>
+                <button 
+                    onClick={() => setShowSidebar(!showSidebar)}
+                    className="p-2 rounded-md bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 transition-colors"
+                    aria-label="메뉴 토글"
+                >
+                    {showSidebar ? '✖' : '☰'}
+                </button>
+            </div>
+            
+            <div className="flex flex-col md:flex-row flex-1">
+                {/* 사이드바 - 모바일에서는 토글 가능 */}
+                <aside className={`
+                    ${showSidebar ? 'block' : 'hidden'} 
+                    md:block 
+                    w-full md:w-48 p-4 
+                    border-b md:border-b-0 md:border-r 
+                    bg-gray-50 dark:bg-gray-900
+                    fixed md:static top-[57px] left-0 right-0 bottom-0 md:top-0
+                    z-30 md:z-auto
+                    overflow-y-auto
+                    h-[calc(100vh-57px)] md:h-auto
+                `}>
+                    <h2 className="font-bold mb-2">그룹</h2>
+                    <ul className="space-y-1">
+                        {groups.map((group) => (
+                            <li key={group.id}>
                                 <button
-                                    onClick={() => handleVote(item)}
-                                    disabled={isVoting}
-                                    className={`px-2 py-1 rounded text-xs transition-all ${loadingItemId === item.id 
-                                        ? 'bg-gray-400 animate-pulse text-white' 
-                                        : votedItemIds.includes(item.id)
-                                            ? 'bg-green-500 hover:bg-red-500 text-white'
-                                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                                        } ${isVoting ? 'cursor-not-allowed opacity-80' : ''}`}
+                                    onClick={() => {
+                                        setSelectedGroupId(group.id);
+                                        setSelectedCategoryId(null);
+                                        // 모바일에서는 선택 후 사이드바 닫기
+                                        // 클라이언트 사이드에서만 실행
+                                        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                                            setShowSidebar(false);
+                                        }
+                                    }}
+                                    className={`w-full text-left py-2 px-1 rounded ${selectedGroupId === group.id ? 'font-bold bg-gray-200 dark:bg-gray-800' : ''}`}
                                 >
-                                    {loadingItemId === item.id 
-                                        ? '⏳ 처리중...' 
-                                        : votedItemIds.includes(item.id) 
-                                            ? '✅ 완료' 
-                                            : '👍 추천'}
+                                    {group.name}
                                 </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-
-
-                {/* 내가 추천한 항목 */}
-                <div className="mt-8 border-t pt-6">
-                    <h3 className="font-semibold mb-2">🧡 내가 추천한 항목</h3>
-                    <ul className="list-disc ml-4 text-sm text-foreground">
-                        {items.filter((i) => votedItemIds.includes(i.id)).map((i) => {
-                            // 해당 항목의 카테고리 찾기
-                            const category = categories.find(c => c.id === i.category_id);
-                            return (
-                                <li key={i.id} className="mb-1">
-                                    <span className="font-medium">{i.name}</span>
-                                    {category && (
-                                        <>
-                                            <span className="ml-2 text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
-                                                {category.name}
-                                            </span>
-                                            <Link 
-                                                href={`/ranking/${category.id}`}
-                                                className="ml-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                            >
-                                                티어 보기
-                                            </Link>
-                                        </>
-                                    )}
-                                </li>
-                            );
-                        })}
+                            </li>
+                        ))}
                     </ul>
-                </div>
-            </main>
+                </aside>
+
+                <main className="flex-1 p-4">
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {filteredCategories.map((cat) => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setSelectedCategoryId(cat.id)}
+                                className={`px-3 py-1 border rounded ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white' : ''} active:bg-blue-100 md:active:bg-transparent`}
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold">{selectedCategory?.name || '카테고리를 선택하세요'}</h2>
+                        {selectedCategoryId && (
+                            <Link 
+                                href={`/ranking/${selectedCategoryId}`}
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-md flex items-center"
+                            >
+                                <span>📊 티어 보기</span>
+                            </Link>
+                        )}
+                    </div>
+
+                    <div className="w-full max-w-3xl">
+                        {filteredItems.length > 0 ? filteredItems.map((item) => (
+                            <div
+                                key={item.id}
+                                className="flex justify-between items-center border px-3 py-2 mb-2 rounded shadow-sm"
+                            >
+                                <span className="truncate mr-2 flex-1">{item.name}</span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className="text-gray-500 text-sm">{item.votes} 추천</span>
+                                    <button
+                                        onClick={() => handleVote(item)}
+                                        disabled={isVoting}
+                                        className={`px-2 py-1 rounded text-sm transition-all ${loadingItemId === item.id 
+                                            ? 'bg-gray-400 animate-pulse text-white' 
+                                            : votedItemIds.includes(item.id)
+                                                ? 'bg-green-500 hover:bg-red-500 text-white'
+                                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                            } ${isVoting ? 'cursor-not-allowed opacity-80' : ''} active:scale-95 md:active:scale-100`}
+                                    >
+                                        {loadingItemId === item.id 
+                                            ? '처리중...' 
+                                            : votedItemIds.includes(item.id) 
+                                                ? '✅ 완료' 
+                                                : '👍 추천'}
+                                    </button>
+                                </div>
+                            </div>
+                        )) : (
+                            selectedCategoryId ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    해당 카테고리에 항목이 없습니다.
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-gray-500">
+                                    카테고리를 선택해주세요.
+                                </div>
+                            )
+                        )}
+                    </div>
+
+                    {/* 내가 추천한 항목 */}
+                    <div className="mt-8 border-t pt-6">
+                        <h3 className="font-semibold mb-2">🧡 내가 추천한 항목</h3>
+                        {items.filter((i) => votedItemIds.includes(i.id)).length > 0 ? (
+                            <ul className="list-disc ml-4 text-sm text-foreground">
+                                {items.filter((i) => votedItemIds.includes(i.id)).map((i) => {
+                                    // 해당 항목의 카테고리 찾기
+                                    const category = categories.find(c => c.id === i.category_id);
+                                    return (
+                                        <li key={i.id} className="mb-2">
+                                            <div className="flex items-center">
+                                                <span className="font-medium">{i.name}</span>
+                                                {category && (
+                                                    <span className="ml-2 text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                                                        {category.name}
+                                                    </span>
+                                                )}
+                                                {category && (
+                                                    <Link 
+                                                        href={`/ranking/${category.id}`}
+                                                        className="ml-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                                    >
+                                                        티어 보기
+                                                    </Link>
+                                                )}
+                                            </div>
+                                            <div className="md:hidden flex gap-2 mt-1">
+                                                <button 
+                                                    onClick={() => handleVote(i)}
+                                                    disabled={isVoting}
+                                                    className="text-xs text-red-500 px-2 py-1 border border-red-200 rounded active:bg-red-50"
+                                                >
+                                                    추천 취소
+                                                </button>
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        ) : (
+                            <div className="text-center py-4 text-gray-500 text-sm">
+                                아직 추천한 항목이 없습니다.
+                            </div>
+                        )}
+                    </div>
+                </main>
+            </div>
         </div>
     );
 }
