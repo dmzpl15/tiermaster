@@ -23,7 +23,7 @@ function SaveUserInfo() {
         // 세션이 있고, 아직 저장되지 않았으면 사용자 정보 저장
         if (session?.user && !saved) {
             const user = session.user; // TypeScript 오류 방지를 위해 변수로 추출
-            
+            console.log('dmzpl 전체 세션 객체:', JSON.stringify(session, null, 2));
             const saveUser = async () => {
                 try {
                     if (!user.email) {
@@ -33,39 +33,29 @@ function SaveUserInfo() {
                     
                     console.log('🔄 사용자 정보 저장 시도:', user.email);
                     
-                    // Supabase 클라이언트 생성
-                    const supabase = createClientComponentClient();
-                    
-                    // 기존 사용자 확인
-                    const { data: existingUser, error: selectError } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('email', user.email)
-                        .maybeSingle();
-                    
-                    if (selectError) {
-                        console.error('사용자 조회 오류:', selectError);
-                        return;
-                    }
-                    
-                    // 사용자가 존재하지 않으면 새로 추가
-                    if (!existingUser) {
-                        console.log('🆕 신규 사용자 등록:', user.email);
-                        const { error: insertError } = await supabase.from('users').insert({
+                    // API 라우트를 통해 사용자 정보 저장
+                    // provider_id를 user.id로 사용 (네이밍 협약상 NextAuth에서는 소셜 로그인 ID가 user.id로 전달됨)
+                    const response = await fetch('/api/auth/register-user', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
                             email: user.email,
                             name: user.name || '',
-                            profile_image: user.image || null,
-                        });
-                        
-                        if (insertError) {
-                            console.error('사용자 등록 오류:', insertError);
-                        } else {
-                            console.log('✅ 사용자 등록 성공');
-                            setSaved(true);
-                        }
-                    } else {
-                        console.log('👤 기존 사용자 확인:', user.email);
+                            image: user.image || null,
+                            provider_id: user.id, // NextAuth에서 전달된 소셜 로그인 ID
+                            provider_type: 'google', // 현재는 Google만 사용하고 있음
+                        }),
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log('✅ 사용자 정보 저장 성공:', result.message);
                         setSaved(true);
+                    } else {
+                        const errorData = await response.json();
+                        console.error('사용자 정보 저장 실패:', errorData.error);
                     }
                 } catch (error) {
                     console.error('사용자 정보 저장 중 오류:', error);

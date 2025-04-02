@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
 
+ /**** 기존 구현
   // ✅ 사용자 ID 조회 (이메일로 UUID 가져오기)
   const { data: userData, error: userError } = await supabase
     .from('users')
@@ -40,12 +41,41 @@ export async function POST(req: Request) {
     if (itemError || !itemInfo) {
       return NextResponse.json({ error: '아이템 정보 없음' }, { status: 400 });
     }
+    ******/
 
-  
+
+   // 사용자 ID와 항목 정보를 병렬로 조회
+    const [userResponse, itemResponse] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id')
+        .eq('email', user.email)
+        .maybeSingle(),
+      
+      supabase
+        .from('items')
+        .select('category_id')
+        .eq('id', itemId)
+        .maybeSingle()
+    ]);
+
+    // 에러 처리
+    if (userResponse.error || !userResponse.data) {
+      return NextResponse.json({ error: '사용자 정보 없음' }, { status: 400 });
+    }
+
+    if (itemResponse.error || !itemResponse.data) {
+      return NextResponse.json({ error: '아이템 정보 없음' }, { status: 400 });
+    }
+
+    const userData = userResponse.data;
+    const itemInfo = itemResponse.data;
+      
   // ✅ 2. 중복 추천 확인 (해당 category_id에 이미 투표한 user가 있는지)
   const { data: existing , error: existingError} = await supabase
     .from('votes')
-    .select('*')
+    //.select('*')
+    .select('id') // 전체 데이터가 아닌 id만 필요
     .eq('user_id', userData.id) // 이메일 대신 UUID 사용
     .eq('category_id', itemInfo.category_id)
     .maybeSingle();
@@ -58,6 +88,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '이미 이 카테고리에 추천함' }, { status: 409 });
     }
 
+  /*******  기존 구현 
     // ✅ 3. 추천 삽입
     const { error: insertError } = await supabase.from('votes').insert({
       user_id: userData.id, // 이메일 대신 UUID 사용
@@ -78,8 +109,21 @@ export async function POST(req: Request) {
 
     if (rpcError) {
       return NextResponse.json({ error: '추천 수 증가 실패' }, { status: 500 });
+    } ****/
+
+      // 트랜잭션 RPC 호출
+    // 오류 메시지를 통해 items 테이블의 id가 숫자 타입임을 확인
+    const { error: rpcError } = await supabase.rpc('increment_votes_and_insert_vote', {
+      user_id_input: userData.id,
+      item_id_input: Number(itemId),  // 숫자로 변환
+      category_id_input: itemInfo.category_id,
+    });
+
+    if (rpcError) {
+      console.error('RPC 오류:', rpcError);  // 오류 세부 정보 로깅
+      return NextResponse.json({ error: '추천 저장 + 증가 실패' }, { status: 500 });
     }
-    
+
    // 성공 응답 (프론트에서 itemName은 이미 알고 있음)
   return NextResponse.json({ success: true, itemId });
 }
@@ -117,7 +161,7 @@ export async function DELETE(req: Request) {
     .from('votes')
     .select('*')
     .eq('user_id', userData.id) // 이메일 대신 UUID 사용
-    .eq('item_id', itemId)
+    .eq('item_id', Number(itemId)) // 숫자로 변환
     .maybeSingle();
 
     if (checkError) {
@@ -133,7 +177,7 @@ export async function DELETE(req: Request) {
     .from('votes')
     .delete()
     .eq('user_id', userData.id) // 이메일 대신 UUID 사용
-    .eq('item_id', itemId);
+    .eq('item_id', Number(itemId)); // 숫자로 변환
 
   if (deleteError) {
     return NextResponse.json({ error: '추천 취소 실패' }, { status: 500 });

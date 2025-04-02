@@ -18,7 +18,7 @@ export const metadata = {
     title: 'Tier Master - 투표 기반 티어 랭킹 서비스',
     description: '사람들이 좋아하는 것을 추천하고, 인기순으로 티어를 만드는 투표 기반 랭킹 서비스',
     images: ['/images/og-image.png'],
-    url: 'https://tiermaster.vercel.app/',
+    url: 'https://tiermaster.co.kr/',
     siteName: 'Tier Master',
     type: 'website',
   },

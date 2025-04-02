@@ -45,6 +45,7 @@ export default function ItemDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
 
   // Kakao SDK 초기화
   useEffect(() => {
@@ -102,13 +103,17 @@ export default function ItemDetailPage() {
 
   // 투표 함수
   const handleVote = async () => {
-    if (!session) {
-      // 로그인 페이지로 리디렉션
-      window.location.href = `/login?callbackUrl=${encodeURIComponent(window.location.href)}`;
+    // 이미 투표 중이거나 투표 완료된 경우 중복 클릭 방지
+    if (isVoting || hasVoted || !session || !item) {
+      if (!session) {
+        // 로그인 페이지로 리디렉션
+        window.location.href = `/login?callbackUrl=${encodeURIComponent(window.location.href)}`;
+      }
       return;
     }
 
-    if (!item) return;
+    // 투표 중 상태로 설정
+    setIsVoting(true);
 
     try {
       const response = await fetch('/api/vote', {
@@ -135,6 +140,9 @@ export default function ItemDetailPage() {
     } catch (err: unknown) {
       console.error('투표 오류:', err);
       alert(err instanceof Error ? err.message : '투표 중 오류가 발생했습니다.');
+    } finally {
+      // 투표 처리 완료 후 상태 업데이트
+      setIsVoting(false);
     }
   };
 
@@ -249,14 +257,16 @@ export default function ItemDetailPage() {
               </div>
               <button
                 onClick={handleVote}
-                disabled={hasVoted}
+                disabled={isVoting || hasVoted}
                 className={`px-6 py-2 rounded-lg font-medium ${
-                  hasVoted 
-                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  isVoting
+                    ? 'bg-blue-400 dark:bg-blue-800 text-white cursor-wait'
+                    : hasVoted 
+                      ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
               >
-                {hasVoted ? '추천 완료' : '👍 추천하기'}
+                {isVoting ? '처리 중...' : hasVoted ? '추천 완료' : '👍 추천하기'}
               </button>
             </div>
             

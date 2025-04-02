@@ -125,53 +125,175 @@ export default function VotePage() {
         ? items.filter((i) => i.category_id === selectedCategoryId)
         : [];
 
-    const handleVote = async (item: Item) => {
-        const alreadyVotedInCategory = items.find(
-            (i) =>
-                i.category_id === item.category_id &&
-                votedItemIds.includes(i.id)
-        );
+    /**
+     * 투표 처리 중 연속 클릭 방지를 위한 디바운싱 상태
+     * true일 때는 클릭을 무시하여 중복 요청 방지
+     */
+    const [isVoting, setIsVoting] = useState(false);
+    
+    /**
+     * 현재 처리 중인 항목의 ID를 추적하여 시각적 피드백 제공
+     */
+    const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
+    
+    /**
+     * 투표 결과 피드백을 위한 토스트 메시지 상태
+     */
+    const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+    
+    /**
+     * 토스트 메시지 표시 후 자동으로 숨기는 함수
+     */
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ show: true, message, type });
+        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+    };
 
-        if (alreadyVotedInCategory) {
-            // 이미 이 카테고리에서 추천한 항목 → 추천 취소
+    /**
+     * 투표 처리 함수 - 항목 클릭시 호출되는 핵심 함수
+     * 
+     * 이 함수는 다음과 같은 세 가지 시나리오를 처리합니다:
+     * 1. 이미 현재 항목에 투표한 경우 -> 투표 취소
+     * 2. 같은 카테고리의 다른 항목에 투표한 경우 -> 기존 투표 취소 후 현재 항목에 투표
+     * 3. 아무데도 투표하지 않은 경우 -> 현재 항목에 투표
+     * 
+     * @param item - 투표할 항목 객체
+     */
+    const handleVote = async (item: Item) => {
+        // IMPORTANT: 이미 요청 처리 중이면 추가 클릭 무시 (디바운싱)
+        if (isVoting) return;
+        
+        // 투표 처리 중 상태로 설정
+        setIsVoting(true);
+        setLoadingItemId(item.id); // 현재 처리 중인 항목 표시
+        
+        try {
+            // IMPORTANT: 현재 항목에 이미 투표했는지 확인
+            // 이미 투표한 경우 투표 취소를 위해 필요
+            const isCurrentItemVoted = votedItemIds.includes(item.id);
+            
+            // IMPORTANT: 같은 카테고리에서 다른 항목에 투표했는지 확인
+            // 카테고리당 하나의 투표만 가능하므로, 다른 항목 투표를 취소해야 함
+            const otherVotedItem = items.find(
+                (i) => i.category_id === item.category_id && 
+                       votedItemIds.includes(i.id) && 
+                       i.id !== item.id
+            );
+
+            // IMPORTANT: 시나리오 1 - 이미 현재 항목에 투표한 경우 -> 투표 취소
+            if (isCurrentItemVoted) {
+                // DELETE 요청을 보내 투표 취소
+                const res = await fetch('/api/vote', {
+                    method: 'DELETE',
+                    body: JSON.stringify({ itemId: item.id }),
+                });
+                
+                if (res.ok) {
+                    // IMPORTANT: 클라이언트 상태 업데이트 (낙관적 UI 업데이트)
+                    // 1. 해당 항목의 투표수 감소
+                    setItems((prev) =>
+                        prev.map((i) =>
+                            i.id === item.id ? { ...i, votes: i.votes - 1 } : i
+                        )
+                    );
+                    // 2. 투표한 항목 목록에서 제거
+                    setVotedItemIds((prev) => prev.filter((id) => id !== item.id));
+                    
+                    // 사용자에게 투표 취소 피드백 제공
+                    showToast(`${item.name} 항목의 투표를 취소했습니다.`, 'success');
+                } else {
+                    // 오류 발생 시 사용자에게 알림
+                    showToast('투표 취소 중 오류가 발생했습니다.', 'error');
+                }
+                // IMPORTANT: 투표 취소 후 함수 종료 - 추가 요청 없음
+                return;
+            }
+            
+            // IMPORTANT: 시나리오 2 - 같은 카테고리의 다른 항목에 투표한 경우
+            // -> 기존 투표 취소 후 현재 항목에 투표
+            if (otherVotedItem) {
+                // 기존 투표 취소를 위한 DELETE 요청
+                const res = await fetch('/api/vote', {
+                    method: 'DELETE',
+                    body: JSON.stringify({ itemId: otherVotedItem.id }),
+                });
+                
+                if (res.ok) {
+                    // IMPORTANT: 클라이언트 상태 업데이트 (낙관적 UI 업데이트)
+                    // 1. 기존 항목의 투표수 감소
+                    setItems((prev) =>
+                        prev.map((i) =>
+                            i.id === otherVotedItem.id ? { ...i, votes: i.votes - 1 } : i
+                        )
+                    );
+                    // 2. 투표한 항목 목록에서 기존 항목 제거
+                    setVotedItemIds((prev) => prev.filter((id) => id !== otherVotedItem.id));
+                    
+                    // 사용자에게 기존 투표 취소 피드백 제공 (조용히 표시)
+                    console.log(`${otherVotedItem.name} 항목의 기존 투표가 취소되었습니다.`);
+                } else {
+                    // 오류 발생 시 사용자에게 알림
+                    showToast('기존 투표 취소 중 오류가 발생했습니다.', 'error');
+                    return; // 오류 발생 시 현재 항목 투표 시도 중단
+                }
+            }
+
+            // IMPORTANT: 시나리오 3 - 현재 항목에 투표 (모든 경우 실행)
+            // 새로운 투표를 위한 POST 요청
             const res = await fetch('/api/vote', {
-                method: 'DELETE',
-                body: JSON.stringify({ itemId: alreadyVotedInCategory.id }),
+                method: 'POST',
+                body: JSON.stringify({ itemId: item.id }),
             });
+
+            const result = await res.json();
+
             if (res.ok) {
+                // IMPORTANT: 클라이언트 상태 업데이트 (낙관적 UI 업데이트)
+                // 1. 현재 항목의 투표수 증가
                 setItems((prev) =>
                     prev.map((i) =>
-                        i.id === alreadyVotedInCategory.id
-                            ? { ...i, votes: i.votes - 1 }
-                            : i
+                        i.id === item.id ? { ...i, votes: i.votes + 1 } : i
                     )
                 );
-                setVotedItemIds((prev) => prev.filter((id) => id !== alreadyVotedInCategory.id));
+                // 2. 투표한 항목 목록에 현재 항목 추가
+                setVotedItemIds((prev) => [...prev, item.id]);
+                
+                // 사용자에게 투표 성공 피드백 제공
+                showToast(`${item.name} 항목에 투표했습니다!`, 'success');
+            } else {
+                // 오류 발생 시 사용자에게 알림
+                showToast(result.error || '투표 실패: 다시 시도해주세요.', 'error');
             }
-        }
-
-        // 새로운 항목 추천
-        const res = await fetch('/api/vote', {
-            method: 'POST',
-            body: JSON.stringify({ itemId: item.id }),
-        });
-
-        const result = await res.json();
-
-        if (res.ok) {
-            setItems((prev) =>
-                prev.map((i) =>
-                    i.id === item.id ? { ...i, votes: i.votes + 1 } : i
-                )
-            );
-            setVotedItemIds((prev) => [...prev, item.id]);
-        } else {
-            alert(result.error || '추천 실패');
+        } catch (error) {
+            // IMPORTANT: 예외 처리 - 네트워크 오류 등 처리
+            console.error('투표 처리 오류:', error);
+            showToast('네트워크 오류: 인터넷 연결을 확인해주세요.', 'error');
+        } finally {
+            // IMPORTANT: 디바운싱 해제를 위한 타이머
+            // 약간의 지연을 주어 연속 클릭 방지 (300ms 쿨다운)
+            setTimeout(() => {
+                setIsVoting(false);
+                setLoadingItemId(null); // 로딩 상태 해제
+            }, 300);
         }
     };
 
+    // 토스트 메시지 컴포넌트
+    const Toast = () => {
+        if (!toast.show) return null;
+        
+        return (
+            <div className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg transition-opacity duration-300 ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                {toast.message}
+            </div>
+        );
+    };
+    
     return (
-        <div className="flex min-h-screen bg-background text-foreground">
+        <div className="flex min-h-screen bg-background text-foreground relative">
+            {/* 토스트 메시지 표시 */}
+            <Toast />
+            
             <aside className="w-48 p-4 border-r bg-gray-50 dark:bg-gray-900">
                 <h2 className="font-bold mb-2">그룹</h2>
                 <ul className="space-y-1">
@@ -229,12 +351,19 @@ export default function VotePage() {
                                 <span className="text-gray-500">{item.votes} 추천</span>
                                 <button
                                     onClick={() => handleVote(item)}
-                                    className={`px-2 py-1 rounded text-xs ${votedItemIds.includes(item.id)
-                                        ? 'bg-gray-400 text-white'
-                                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                                        }`}
+                                    disabled={isVoting}
+                                    className={`px-2 py-1 rounded text-xs transition-all ${loadingItemId === item.id 
+                                        ? 'bg-gray-400 animate-pulse text-white' 
+                                        : votedItemIds.includes(item.id)
+                                            ? 'bg-green-500 hover:bg-red-500 text-white'
+                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                        } ${isVoting ? 'cursor-not-allowed opacity-80' : ''}`}
                                 >
-                                    {votedItemIds.includes(item.id) ? '✅ 완료' : '👍 추천'}
+                                    {loadingItemId === item.id 
+                                        ? '⏳ 처리중...' 
+                                        : votedItemIds.includes(item.id) 
+                                            ? '✅ 완료' 
+                                            : '👍 추천'}
                                 </button>
                             </div>
                         </div>
